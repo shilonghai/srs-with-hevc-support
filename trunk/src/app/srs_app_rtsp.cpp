@@ -476,17 +476,17 @@ int SrsRtspConn::on_rtp_video(SrsRtpPacket* pkt, int64_t dts, int64_t pts)
 {
     int ret = ERROR_SUCCESS;
 
-    if ((ret = kickoff_audio_cache(pkt, dts)) != ERROR_SUCCESS) {
-        return ret;
-    }
+//    if ((ret = kickoff_audio_cache(pkt, dts)) != ERROR_SUCCESS) {
+//        return ret;
+//    }
     if ( pkt->video_codec_type == 0 )
     {
-    	if ((ret = write_h264_ipb_frame(pkt->payload->bytes(), pkt->payload->length(), (u_int32_t)dts / 90, (u_int32_t)pts / 90)) != ERROR_SUCCESS) {
+    	if ((ret = write_h264_ipb_frame(pkt->payload->bytes(), pkt->payload->length(), (u_int32_t)dts , (u_int32_t)pts/90 )) != ERROR_SUCCESS) {
         	return ret;
     	}
 	} else if(pkt->video_codec_type == 1)
 	{
-    	if ((ret = write_h265_ipb_frame(pkt->payload->bytes(), pkt->payload->length(), (u_int32_t)dts / 90, (u_int32_t)pts / 90)) != ERROR_SUCCESS) {
+    	if ((ret = write_h265_ipb_frame(pkt->payload->bytes(), pkt->payload->length(), (u_int32_t)dts , (u_int32_t)pts )) != ERROR_SUCCESS) {
         	return ret;
     	}
 	}
@@ -527,17 +527,13 @@ int SrsRtspConn::kickoff_audio_cache(SrsRtpPacket* pkt, int64_t dts)
 
     if (dts - acache->dts > 0 && acache->audio_samples->nb_sample_units > 0) {
 		int64_t delta = 0;
-		if (pkt->payload_type == acache->payload_type) {
             delta = (dts - acache->dts) / acache->audio_samples->nb_sample_units;
             acache->delta = (dts - acache->dts);
-        } else {
-            delta = acache->delta / acache->audio_samples->nb_sample_units;
-        }
 		
         for (int i = 0; i < acache->audio_samples->nb_sample_units; i++) {
             char* frame = acache->audio_samples->sample_units[i].bytes;
             int nb_frame = acache->audio_samples->sample_units[i].size;
-            int64_t timestamp = (acache->dts + delta * i) / 90;
+            int64_t timestamp = (acache->dts + delta * i);
             acodec->aac_packet_type = 1;
             if ((ret = write_audio_raw_frame(frame, nb_frame, acodec, (uint32_t)timestamp)) != ERROR_SUCCESS) {
                 return ret;

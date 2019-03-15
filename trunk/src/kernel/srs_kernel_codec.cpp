@@ -755,12 +755,6 @@ int SrsCodecSample::add_hvcc_sample_unit (char * bytes, int size)
 				{
 					has_aud 						= true;
 				}
-
-
-			if (first_nalu_type == SrsAvcNaluTypeReserved)
-				{
-					first_nalu_type 		= nal_unit_type;
-				}
 		}
 
 	return ret;
@@ -1460,15 +1454,15 @@ int SrsAvcAacCodec::hvcc_demux_vps_sps_pps (SrsStream * stream)
 		unsigned int(32) general_profile_compatibility_flags;
 		unsigned int(48) general_constraint_indicator_flags;
 		unsigned int(8) general_level_idc;
-		bit(4) reserved = ‘1111’b;
+		bit(4) reserved = â€˜1111â€™b;
 		unsigned int(12) min_spatial_segmentation_idc;
-		bit(6) reserved = ‘111111’b;
+		bit(6) reserved = â€˜111111â€™b;
 		unsigned int(2) parallelismType;
-		bit(6) reserved = ‘111111’b;
+		bit(6) reserved = â€˜111111â€™b;
 		unsigned int(2) chroma_format_idc;
-		bit(5) reserved = ‘11111’b;
+		bit(5) reserved = â€˜11111â€™b;
 		unsigned int(3) bit_depth_luma_minus8;
-		bit(5) reserved = ‘11111’b;
+		bit(5) reserved = â€˜11111â€™b;
 		unsigned int(3) bit_depth_chroma_minus8;
 		bit(16) avgFrameRate;
 		bit(2) constantFrameRate;
@@ -1524,19 +1518,19 @@ int SrsAvcAacCodec::hvcc_demux_vps_sps_pps (SrsStream * stream)
 	//hvcc_level					= (SrsHvccLevel)
 	stream->read_1bytes ();
 
-	// bit(4) reserved = ¿1111¿b; unsigned int(12) min_spatial_segmentation_idc;
+	// bit(4) reserved = Â¿1111Â¿b; unsigned int(12) min_spatial_segmentation_idc;
 	stream->read_2bytes ();
 
-	// bit(6) reserved = ¿111111¿b;  unsigned int(2) parallelismType;
+	// bit(6) reserved = Â¿111111Â¿b;  unsigned int(2) parallelismType;
 	stream->read_1bytes ();
 
-	// bit(6) reserved = ¿111111¿b;  unsigned int(2) chroma_format_idc;
+	// bit(6) reserved = Â¿111111Â¿b;  unsigned int(2) chroma_format_idc;
 	stream->read_1bytes ();
 
-	// bit(5) reserved = ¿11111¿b;	 unsigned int(3) bit_depth_luma_minus8;
+	// bit(5) reserved = Â¿11111Â¿b;	 unsigned int(3) bit_depth_luma_minus8;
 	stream->read_1bytes ();
 
-	// bit(5) reserved = ¿11111¿b;	 unsigned int(3) bit_depth_chroma_minus8;
+	// bit(5) reserved = Â¿11111Â¿b;	 unsigned int(3) bit_depth_chroma_minus8;
 	stream->read_1bytes ();
 
 	// bit(16) avgFrameRate;

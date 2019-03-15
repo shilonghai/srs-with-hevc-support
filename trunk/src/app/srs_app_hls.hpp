@@ -103,7 +103,7 @@ class SrsHlsSegment
 {
 public:
     // duration in seconds in m3u8.
-	double video_duration;
+    double duration;
     // sequence number in m3u8.
     int sequence_no;
     // ts uri in m3u8.
@@ -114,7 +114,7 @@ public:
     SrsHlsCacheWriter* writer;
     SrsTSMuxer* muxer;
     // current segment start dts for m3u8
-	int64_t video_segment_start_dts;
+    int64_t segment_start_dts;
     // whether current segement is sequence header.
     bool is_sequence_header;
 public:
@@ -125,7 +125,7 @@ public:
     * update the segment duration.
     * @current_frame_dts the dts of frame, in tbn of ts.
     */
-	virtual void video_update_duration(int64_t current_frame_dts);
+    virtual void update_duration(int64_t current_frame_dts);
 };
 
 /**

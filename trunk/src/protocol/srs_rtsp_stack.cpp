@@ -38,12 +38,25 @@ using namespace std;
 #include <srs_kernel_utility.hpp>
 #include <srs_kernel_stream.hpp>
 #include <srs_kernel_codec.hpp>
+#include <sys/time.h>
 
 #ifdef SRS_AUTO_STREAM_CASTER
 
 #define SRS_RTSP_BUFFER 4096
 
-// get the status text of code.
+u_int32_t convertToRTPTimestamp(struct timeval tv, u_int32_t fTimestampFrequency) {
+  // 将 "struct timeval" 单元转换为RTP 时间戳单元:
+  u_int32_t timestampIncrement = (fTimestampFrequency*tv.tv_sec);
+// 加0.5是为了实现四舍五入
+  timestampIncrement += (u_int32_t)(fTimestampFrequency*(tv.tv_usec/1000000.0) + 0.5); // note: rounding
+
+// 生成32位的时间戳
+// 时间戳 =  时间戳增量
+  u_int32_t const rtpTimestamp = timestampIncrement;
+
+  return rtpTimestamp;
+}
+
 string srs_generate_rtsp_status_text(int status)
 {
     static std::map<int, std::string> _status_map;
@@ -184,6 +197,9 @@ void SrsRtpPacket::reap(SrsRtpPacket* src)
 int SrsRtpPacket::decode(SrsStream* stream)
 {
     int ret = ERROR_SUCCESS;
+    struct timeval tv; 
+
+    gettimeofday(&tv, NULL);
 
     // 12bytes header
     if (!stream->require(12)) {
@@ -209,15 +225,10 @@ int SrsRtpPacket::decode(SrsStream* stream)
     /*SeqNum*/
     sequence_number = ((stream->bytes[2] << 8) & 0xFF00) | (stream->bytes[3] & 0xFF);
     /*TS*/
-    u_int16_t t1, t2;
-    t1 = ((stream->bytes[4] << 8) & 0xFF00) | ((stream->bytes[5]) & 0xFF);
-    t2 = ((stream->bytes[6] << 8) & 0xFF00) | ((stream->bytes[7]) & 0xFF);
-    //printf("SSSS t1 %d t2 %d\n",t1,t2);
-    timestamp = t1 * 32768 + t2;
+//    timestamp = (u_int32_t)((stream->bytes[4]<<24) &0xFF000000) | ((stream->bytes[5]<<16) & 0xFF0000) | ((stream->bytes[6]<<8) & 0xFF00) | ((stream->bytes[7]) & 0xFF);
+    timestamp = convertToRTPTimestamp( tv, 90000);
     /*SSRC*/
-    t1 = ((stream->bytes[8] << 8) & 0xFF00) | ((stream->bytes[9]) & 0xFF);
-    t2 = ((stream->bytes[10] << 8) & 0xFF00) | ((stream->bytes[11]) & 0xFF);
-    ssrc = t1 * 32768 + t2;
+    ssrc = (u_int32_t)((stream->bytes[8]<<24) &0xFF000000) | ((stream->bytes[9]<<16) & 0xFF0000) | ((stream->bytes[10]<<8) & 0xFF00) | ((stream->bytes[11]) & 0xFF);
 
     // TODO: FIXME: check sequence number.
 
@@ -515,7 +526,7 @@ int SrsRtpPacket::decode_h265(SrsStream *stream)
     switch (nal_type)
     {
     case 1: /*Single NALU*/
-        payload->append((const char*)start_sequence, sizeof(start_sequence));
+//        payload->append((const char*)start_sequence, sizeof(start_sequence));
         payload->append((const char *)&stream->bytes[12], stream->size() - 12);
         chunked = true;
         completed = true;
@@ -607,7 +618,7 @@ int SrsRtpPacket::decode_h265(SrsStream *stream)
 			completed = false;
 			fragment_st = 0;
 			if ((start_bit == 1 ) && (end_bit == 0 )) {
-				payload->append((const char*)start_sequence, sizeof(start_sequence));
+//				payload->append((const char*)start_sequence, sizeof(start_sequence));
 				payload->append((const char*)&nal, 2);
 					
 				fragment_st = 1;

@@ -134,9 +134,9 @@ string SrsHlsCacheWriter::cache()
 
 SrsHlsSegment::SrsHlsSegment(SrsTsContext* c, bool write_cache, bool write_file, SrsCodecAudio ac, SrsCodecVideo vc)
 {
-	video_duration = 0;
+    duration = 0;
     sequence_no = 0;
-	video_segment_start_dts = 0;
+    segment_start_dts = 0;
     is_sequence_header = false;
     writer = new SrsHlsCacheWriter(write_cache, write_file);
     muxer = new SrsTSMuxer(writer, c, ac, vc);
@@ -148,27 +148,26 @@ SrsHlsSegment::~SrsHlsSegment()
     srs_freep(writer);
 }
 
-void SrsHlsSegment::video_update_duration(int64_t current_frame_dts)
+void SrsHlsSegment::update_duration(int64_t current_frame_dts)
 {
     // we use video/audio to update segment duration,
     // so when reap segment, some previous audio frame will
     // update the segment duration, which is nagetive,
     // just ignore it.
-    if (current_frame_dts < video_segment_start_dts) {
+    if (current_frame_dts < segment_start_dts) {
         // for atc and timestamp jump, reset the start dts.
-        if (current_frame_dts < video_segment_start_dts - SRS_AUTO_HLS_SEGMENT_TIMESTAMP_JUMP_MS) {
-            srs_warn("hls video timestamp jump %" PRId64"=>%" PRId64, video_segment_start_dts, current_frame_dts);
-            video_segment_start_dts = current_frame_dts;
+        if (current_frame_dts < segment_start_dts - SRS_AUTO_HLS_SEGMENT_TIMESTAMP_JUMP_MS * 90) {
+            srs_warn("hls timestamp jump %" PRId64"=>%" PRId64, segment_start_dts, current_frame_dts);
+            segment_start_dts = current_frame_dts;
         }
         return;
     }
     
-    video_duration = (current_frame_dts - video_segment_start_dts) / 1000.0;
-    srs_assert(video_duration >= 0);
+    duration = (current_frame_dts - segment_start_dts) / 90000.0;
+    srs_assert(duration >= 0);
     
     return;
 }
-
 
 SrsDvrAsyncCallOnHls::SrsDvrAsyncCallOnHls(int c, SrsRequest* r, string p, string t, string m, string mu, int s, double d)
 {
@@ -363,7 +362,7 @@ string SrsHlsMuxer::ts_url()
 
 double SrsHlsMuxer::duration()
 {
-    return current? current->video_duration:0;
+    return current? current->duration:0;
 }
 
 int SrsHlsMuxer::deviation()
@@ -482,7 +481,7 @@ int SrsHlsMuxer::segment_open(int64_t segment_start_dts)
     // new segment.
     current = new SrsHlsSegment(context, should_write_cache, should_write_file, default_acodec, default_vcodec);
     current->sequence_no = _sequence_no++;
-	current->video_segment_start_dts = segment_start_dts;
+    current->segment_start_dts = segment_start_dts;
     
     // generate filename.
     std::string ts_file = hls_ts_file;
@@ -573,7 +572,6 @@ int SrsHlsMuxer::segment_open(int64_t segment_start_dts)
         current->muxer->update_acodec(acodec);
     }
     
-	current->muxer->update_vcodec(default_vcodec);
     return ret;
 }
 
@@ -595,16 +593,16 @@ bool SrsHlsMuxer::is_segment_overflow()
     srs_assert(current);
     
     // to prevent very small segment.
-    if (current->video_duration * 1000 < 2 * SRS_AUTO_HLS_SEGMENT_MIN_DURATION_MS) {
+    if (current->duration * 1000 < 2 * SRS_AUTO_HLS_SEGMENT_MIN_DURATION_MS) {
         return false;
     }
     
     // use N% deviation, to smoother.
     double deviation = hls_ts_floor? SRS_HLS_FLOOR_REAP_PERCENT * deviation_ts * hls_fragment : 0.0;
     srs_info("hls: dur=%.2f, tar=%.2f, dev=%.2fms/%dp, frag=%.2f",
-        current->video_duration, hls_fragment + deviation, deviation, deviation_ts, hls_fragment);
+        current->duration, hls_fragment + deviation, deviation, deviation_ts, hls_fragment);
     
-    return current->video_duration >= hls_fragment + deviation;
+    return current->duration >= hls_fragment + deviation;
 }
 
 bool SrsHlsMuxer::wait_keyframe()
@@ -618,16 +616,16 @@ bool SrsHlsMuxer::is_segment_absolutely_overflow()
     srs_assert(current);
     
     // to prevent very small segment.
-    if (current->video_duration * 1000 < 2 * SRS_AUTO_HLS_SEGMENT_MIN_DURATION_MS) {
+    if (current->duration * 1000 < 2 * SRS_AUTO_HLS_SEGMENT_MIN_DURATION_MS) {
         return false;
     }
     
     // use N% deviation, to smoother.
     double deviation = hls_ts_floor? SRS_HLS_FLOOR_REAP_PERCENT * deviation_ts * hls_fragment : 0.0;
     srs_info("hls: dur=%.2f, tar=%.2f, dev=%.2fms/%dp, frag=%.2f",
-             current->video_duration, hls_fragment + deviation, deviation, deviation_ts, hls_fragment);
+             current->duration, hls_fragment + deviation, deviation, deviation_ts, hls_fragment);
     
-    return current->video_duration >= hls_aof_ratio * hls_fragment + deviation;
+    return current->duration >= hls_aof_ratio * hls_fragment + deviation;
 }
 
 int SrsHlsMuxer::update_acodec(SrsCodecAudio ac)
@@ -658,6 +656,7 @@ int SrsHlsMuxer::flush_audio(SrsTsCache* cache)
     }
     
     // update the duration of segment.
+    current->update_duration(cache->audio->pts);
     
     if ((ret = current->muxer->write_audio(cache->audio)) != ERROR_SUCCESS) {
         return ret;
@@ -686,7 +685,7 @@ int SrsHlsMuxer::flush_video(SrsTsCache* cache)
     srs_assert(current);
     
     // update the duration of segment.
-    current->video_update_duration(cache->video->dts);
+    current->update_duration(cache->video->dts);
     
     if ((ret = current->muxer->write_video(cache->video)) != ERROR_SUCCESS) {
         return ret;
@@ -719,14 +718,14 @@ int SrsHlsMuxer::segment_close(string log_desc)
     // when too small, it maybe not enough data to play.
     // when too large, it maybe timestamp corrupt.
     // make the segment more acceptable, when in [min, max_td * 2], it's ok.
-    if (current->video_duration * 1000 >= SRS_AUTO_HLS_SEGMENT_MIN_DURATION_MS && (int)current->video_duration <= max_td * 2) {
+    if (current->duration * 1000 >= SRS_AUTO_HLS_SEGMENT_MIN_DURATION_MS && (int)current->duration <= max_td * 2) {
         segments.push_back(current);
         
         // use async to call the http hooks, for it will cause thread switch.
         if ((ret = async->execute(new SrsDvrAsyncCallOnHls(
             _srs_context->get_id(), req,
             current->full_path, current->uri, m3u8, m3u8_url,
-            current->sequence_no, current->video_duration))) != ERROR_SUCCESS)
+            current->sequence_no, current->duration))) != ERROR_SUCCESS)
         {
             return ret;
         }
@@ -737,8 +736,8 @@ int SrsHlsMuxer::segment_close(string log_desc)
         }
     
         srs_info("%s reap ts segment, sequence_no=%d, uri=%s, duration=%.2f, start=%" PRId64,
-            log_desc.c_str(), current->sequence_no, current->uri.c_str(), current->video_duration, 
-            current->video_segment_start_dts);
+            log_desc.c_str(), current->sequence_no, current->uri.c_str(), current->duration, 
+            current->segment_start_dts);
     
         // close the muxer of finished segment.
         srs_freep(current->muxer);
@@ -758,8 +757,8 @@ int SrsHlsMuxer::segment_close(string log_desc)
         _sequence_no--;
         
         srs_trace("%s drop ts segment, sequence_no=%d, uri=%s, duration=%.2f, start=%" PRId64"",
-            log_desc.c_str(), current->sequence_no, current->uri.c_str(), current->video_duration, 
-            current->video_segment_start_dts);
+            log_desc.c_str(), current->sequence_no, current->uri.c_str(), current->duration, 
+            current->segment_start_dts);
         
         // rename from tmp to real path
         std::string tmp_file = current->full_path + ".tmp";
@@ -780,7 +779,7 @@ int SrsHlsMuxer::segment_close(string log_desc)
     int remove_index = -1;
     for (int i = (int)segments.size() - 1; i >= 0; i--) {
         SrsHlsSegment* segment = segments[i];
-        duration += segment->video_duration;
+        duration += segment->duration;
         
         if ((int)duration > hls_window) {
             remove_index = i;
@@ -892,7 +891,7 @@ int SrsHlsMuxer::_refresh_m3u8(string m3u8_file)
     int target_duration = 0;
     for (it = segments.begin(); it != segments.end(); ++it) {
         SrsHlsSegment* segment = *it;
-        target_duration = srs_max(target_duration, (int)ceil(segment->video_duration));
+        target_duration = srs_max(target_duration, (int)ceil(segment->duration));
     }
     target_duration = srs_max(target_duration, max_td);
     
@@ -912,7 +911,7 @@ int SrsHlsMuxer::_refresh_m3u8(string m3u8_file)
         // "#EXTINF:4294967295.208,\n"
         ss.precision(3);
         ss.setf(std::ios::fixed, std::ios::floatfield);
-        ss << "#EXTINF:" << segment->video_duration << ", no desc" << SRS_CONSTS_LF;
+        ss << "#EXTINF:" << segment->duration << ", no desc" << SRS_CONSTS_LF;
         srs_verbose("write m3u8 segment info success.");
         
         // {file name}\n
@@ -1424,7 +1423,7 @@ int SrsHls::on_video(SrsSharedPtrMessage* shared_video, bool is_sps_pps)
         return ret;
     }
     
-    int64_t dts = video->timestamp;
+    int64_t dts = video->timestamp * 90;
     stream_dts = dts;
     if ((ret = hls_cache->write_video(codec, muxer, dts, sample)) != ERROR_SUCCESS) {
         srs_error("hls cache write video failed. ret=%d", ret);
